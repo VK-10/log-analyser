@@ -2,7 +2,7 @@ package main
 
 import (
 	"log"
-	"log-classifier/backend/internal/api"
+	"log-classifier/internal/api"
 	"net/http"
 )
 

@@ -2,7 +2,7 @@ package classifier
 
 import (
 	"context"
-	"log-classifier/backend/internal/models"
+	"log-classifier/internal/models"
 	"time"
 )
 

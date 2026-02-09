@@ -1,8 +1,8 @@
 package worker
 
 import (
-	"log-classifier/backend/internal/classifier"
-	"log-classifier/backend/internal/models"
+	"log-classifier/internal/classifier"
+	"log-classifier/internal/models"
 )
 
 func ProcessLogs(logs []models.LogEntry, workers int) []models.ClassificationResult {

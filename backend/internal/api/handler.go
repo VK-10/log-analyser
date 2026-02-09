@@ -4,8 +4,8 @@ import (
 	"encoding/json"
 	"net/http"
 
-	"log-classifier/backend/internal/models"
-	"log-classifier/backend/internal/worker"
+	"log-classifier/internal/models"
+	"log-classifier/internal/worker"
 )
 
 func ClassifyHandler(w http.ResponseWriter, r *http.Request) {
