@@ -36,6 +36,8 @@ func Retry(ctx context.Context, attempts int, fn func() (string, error)) (string
 			return label, nil
 		}
 
+		errs = append(errs, fmt.Errorf("attempt %d: %w", i+1, err))
+
 		if isPermanent(err) {
 			return "", err
 		}

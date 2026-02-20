@@ -3,6 +3,7 @@ package classifier
 import (
 	"context"
 	"log-classifier/internal/models"
+	"strings"
 	"time"
 )
 
@@ -15,8 +16,13 @@ func Classify(entry models.LogEntry) string {
 	ctx, cancel := context.WithTimeout(context.Background(), 500*time.Millisecond)
 	defer cancel()
 
-	label, err := Retry(2, func() (string, error) {
-		return ClassifyWithBERT(ctx, entry.LogMessage)
+	// marking circuit-open errors as permanent
+	label, err := Retry(ctx, 2, func() (string, error) {
+		result, err := ClassifyWithBERT(ctx, entry.LogMessage)
+		if err != nil && strings.Contains(err.Error(), "circuit open") {
+			return "", Permanent(err) // stops retry immediately
+		}
+		return result, err
 	})
 
 	if err == nil && label != "" {
@@ -27,7 +33,7 @@ func Classify(entry models.LogEntry) string {
 	llmCtx, cancelLLM := context.WithTimeout(context.Background(), 2*time.Second)
 	defer cancelLLM()
 
-	label, err = Retry(2, func() (string, error) {
+	label, err = Retry(llmCtx, 2, func() (string, error) {
 		return CallLLMWithTimeout(llmCtx, entry.LogMessage)
 	})
 
