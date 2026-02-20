@@ -3,6 +3,7 @@ package classifier
 import (
 	"errors"
 	"log-classifier/internal/metrics"
+
 	"sync"
 	"time"
 )
