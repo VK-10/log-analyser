@@ -3,7 +3,6 @@ package classifier
 import (
 	"errors"
 	"log-classifier/internal/metrics"
-
 	"sync"
 	"time"
 )
@@ -151,13 +150,3 @@ var (
 	llmBreaker  = NewCircuitBreaker(3, 5*time.Second)
 	bertBreaker = NewCircuitBreaker(5, 10*time.Second) // more tolerant
 )
-
-func callLLMInternal(msg string) (string, error) {
-	return llmBreaker.Call(func() (string, error) {
-
-		if msg == "fail" {
-			return "", errors.New("llm failed")
-		}
-		return "llm_label", nil
-	})
-}

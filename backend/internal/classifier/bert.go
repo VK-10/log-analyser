@@ -34,7 +34,6 @@ func ClassifyWithBERT(ctx context.Context, msg string) (string, error) {
 	}
 
 	req, err := http.NewRequestWithContext(ctx, "POST", bertServiceURL, bytes.NewBuffer((jsonData)))
-
 	if err != nil {
 		return "", fmt.Errorf("failed to create request: %w", err)
 	}
