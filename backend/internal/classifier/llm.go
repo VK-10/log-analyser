@@ -24,6 +24,27 @@ var llmClient = &http.Client{
 
 const llmServiceURL = "http://llm-service:5001/classify"
 
+var llmLabelMap = map[string]ClassificationResult{
+	"workflow error": {
+		LabelID:    "WORKFLOW_ERROR",
+		Label:      "Workflow Error",
+		Source:     "llm",
+		Confidence: 0.65,
+	},
+	"deprecation warning": {
+		LabelID:    "DEPRECATION_WARNING",
+		Label:      "Deprecation Warning",
+		Source:     "llm",
+		Confidence: 0.65,
+	},
+	"unclassified": {
+		LabelID:    "UNCLASSIFIED",
+		Label:      "Unclassified",
+		Source:     "llm",
+		Confidence: 0.30,
+	},
+}
+
 func callLLMInternal(msg string) (string, error) {
 	return llmBreaker.Call(func() (string, error) {
 		reqBody := LLMRequest{Message: msg}

@@ -15,6 +15,7 @@ type BERTRequest struct {
 }
 
 type BERTResponse struct {
+	LabelID    string  `json:"label_id"`
 	Label      string  `json:"label"`
 	Confidence float64 `json:"confidence"`
 }
@@ -25,37 +26,43 @@ var bertClient = &http.Client{
 
 const bertServiceURL = "http://bert-service:5000/classify"
 
-func ClassifyWithBERT(ctx context.Context, msg string) (string, error) {
+func ClassifyWithBERT(ctx context.Context, msg string) (*ClassificationResult, error) {
 	reqBody := BERTRequest{Message: msg}
 	jsonData, err := json.Marshal(reqBody)
 
 	if err != nil {
-		return "", fmt.Errorf("failed to marshal request: %w", err)
+		return nil, fmt.Errorf("failed to marshal request: %w", err)
 	}
 
 	req, err := http.NewRequestWithContext(ctx, "POST", bertServiceURL, bytes.NewBuffer((jsonData)))
 	if err != nil {
-		return "", fmt.Errorf("failed to create request: %w", err)
+		return nil, fmt.Errorf("failed to create request: %w", err)
 	}
 	req.Header.Set("Content-Type", "application/json")
 
 	resp, err := bertClient.Do(req)
 	if err != nil {
-		return "", fmt.Errorf("failed to call BERT service: %w", err)
+		return nil, fmt.Errorf("failed to call BERT service: %w", err)
 	}
 	defer resp.Body.Close()
 
 	if resp.StatusCode != http.StatusOK {
 		body, _ := io.ReadAll(resp.Body)
-		return "", fmt.Errorf("BERT service returned status %d: %s", resp.StatusCode, string(body))
+		return nil, fmt.Errorf("BERT service returned status %d: %s", resp.StatusCode, string(body))
 
 	}
 
 	var bertResp BERTResponse
 	if err := json.NewDecoder(resp.Body).Decode(&bertResp); err != nil {
-		return "", fmt.Errorf("failed to decode response: %w", err)
+		return nil, fmt.Errorf("failed to decode response: %w", err)
 	}
 
-	return bertResp.Label, nil
+	// return bertResp.Label, nil
+	return &ClassificationResult{
+		LabelID:    bertResp.LabelID,
+		Label:      bertResp.Label,
+		Source:     "classifier",
+		Confidence: bertResp.Confidence,
+	}, nil
 
 }

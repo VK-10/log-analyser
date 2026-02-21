@@ -15,7 +15,7 @@ func (e *permanentError) Unwrap() error { return e.err }
 
 // Permanents error marks (non-retryable)
 func Permanent(err error) error {
-	return &permanentError{err}
+	return &permanentError{err: err}
 }
 
 func isPermanent(err error) bool {
@@ -23,35 +23,36 @@ func isPermanent(err error) bool {
 	return errors.As(err, &p)
 }
 
-func Retry(ctx context.Context, attempts int, fn func() (string, error)) (string, error) {
+func Retry[T any](ctx context.Context, attempts int, fn func() (T, error)) (T, error) {
+	var zero T
 	var errs []error
 
 	for i := 0; i < attempts; i++ {
 		if ctx.Err() != nil {
-			return "", fmt.Errorf("context cancelled before attempt %d: %w", i+1, ctx.Err())
+			return zero, fmt.Errorf("context cancelled before attempt %d: %w", i+1, ctx.Err())
 		}
 
-		label, err := fn()
+		result, err := fn()
 		if err == nil {
-			return label, nil
+			return result, nil
+		}
+
+		if isPermanent(err) {
+			return zero, err
 		}
 
 		errs = append(errs, fmt.Errorf("attempt %d: %w", i+1, err))
-
-		if isPermanent(err) {
-			return "", err
-		}
 
 		if i < attempts-1 {
 			select {
 			case <-time.After(time.Duration(i+1) * 100 * time.Duration(time.Millisecond)):
 				//continue
 			case <-ctx.Done():
-				return "", fmt.Errorf("context cancelled during backoff: %w", ctx.Err())
+				return zero, fmt.Errorf("context cancelled during backoff: %w", ctx.Err())
 			}
 		}
 
 	}
 
-	return "", errors.Join(errs...)
+	return zero, errors.Join(errs...)
 }

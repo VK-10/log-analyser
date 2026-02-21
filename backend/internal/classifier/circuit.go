@@ -41,62 +41,103 @@ var (
 	ErrTooManyRequests = errors.New("circuit breaker: too many requests")
 )
 
-func (cb *CircuitBreaker) Call(fn func() (string, error)) (string, error) {
-	cb.mu.RLock()
-	state := cb.state
+//call
+func (cb *CircuitBreaker) Call[T any](fn func() (T, error)) (T, error) {
+	var zero T
 
-	if state == StateOpen {
+	cb.mu.Lock()
+
+	// OPEN state
+	if cb.state == StateOpen {
 		if time.Since(cb.lastFailureTime) > cb.resetTimeout {
-			cb.mu.RUnlock()
-			cb.transitionToHalfOpen()
-			return cb.Call(fn)
+			cb.state = StateHalfOpen
+			cb.halfOpenAttempts = 0
+		} else {
+			cb.mu.Unlock()
+			return zero, ErrCircuitOpen
 		}
-		cb.mu.RUnlock()
-		return "", ErrCicuitOpen
 	}
 
-	if state == StateHalfOpen {
+	// HALF-OPEN state
+	if cb.state == StateHalfOpen {
 		if cb.halfOpenAttempts >= cb.halfOpenMaxReq {
-			cb.mu.RUnlock()
-			return "", ErrTooManyRequests
+			cb.mu.Unlock()
+			return zero, ErrTooManyRequests
 		}
 		cb.halfOpenAttempts++
 	}
-	cb.mu.RUnlock()
 
-	//executing the function
+	cb.mu.Unlock()
+
+	// ---- execute protected call ----
 	result, err := fn()
 
-	// Record result
-	if err != nil {
-		cb.recordFailure()
-		return "", err
-	}
-
-	cb.recordSuccess()
-	return result, nil
-}
-
-func (cb *CircuitBreaker) transitionToHalfOpen() {
 	cb.mu.Lock()
 	defer cb.mu.Unlock()
 
-	if cb.state == StateOpen {
-		cb.setState(StateHalfOpen)
+	if err != nil {
+		cb.recordFailureLocked()
+		return zero, err
+	}
+
+	cb.recordSuccessLocked()
+	return result, nil
+}
+
+
+//state transitions
+
+func (cb *CircuitBreaker) recordSuccessLocked() {
+	switch cb.state {
+	case StateClosed:
+		cb.failures = 0
+	case StateHalfOpen:
+		cb.state = StateClosed
+		cb.failures = 0
 		cb.halfOpenAttempts = 0
 	}
+
+	metrics.CircuitBreakerState.WithLabelValues("llm").Set(0)
 }
 
-func (cb *CircuitBreaker) setState(newState State) {
-	cb.state = newState
+func (cb *CircuitBreaker) recordFailureLocked() {
+	cb.failures++
+	cb.lastFailureTime = time.Now()
 
-	var stateValue float64
-	if newState == StateOpen {
-		stateValue = 1
+	switch cb.state {
+	case StateClosed:
+		if cb.failures >= cb.maxFailures {
+			cb.state = StateOpen
+			metrics.CircuitBreakerState.WithLabelValues("llm").Set(1)
+		}
+	case StateHalfOpen:
+		cb.state = StateOpen
+		metrics.CircuitBreakerState.WithLabelValues("llm").Set(1)
 	}
-
-	metrics.CircuitBreakerState.WithLabelValues("llm").Set(stateValue)
 }
+
+//
+
+// func (cb *CircuitBreaker) transitionToHalfOpen() {
+// 	cb.mu.Lock()
+// 	defer cb.mu.Unlock()
+
+// 	if cb.state == StateOpen {
+// 		cb.setState(StateHalfOpen)
+// 		cb.halfOpenAttempts = 0
+// 	}
+// }
+
+// func (cb *CircuitBreaker) setState(newState State) {
+// 	cb.state = newState
+
+// 	var stateValue float64
+// 	if newState == StateOpen {
+// 		stateValue = 1
+// 	}
+
+// 	metrics.CircuitBreakerState.WithLabelValues("llm").Set(stateValue)
+// }
 
 func (cb *CircuitBreaker) State() State {
 	cb.mu.RLock()
@@ -104,46 +145,47 @@ func (cb *CircuitBreaker) State() State {
 	return cb.state
 }
 
-func (cb *CircuitBreaker) recordSuccess() {
-	cb.mu.Lock()
-	defer cb.mu.Unlock()
+// func (cb *CircuitBreaker) recordSuccess() {
+// 	cb.mu.Lock()
+// 	defer cb.mu.Unlock()
 
-	switch cb.state {
-	case StateClosed:
-		cb.failures = 0
-	case StateHalfOpen:
-		cb.setState(StateClosed)
-		cb.failures = 0
-		cb.halfOpenAttempts = 0
-	}
-}
+// 	switch cb.state {
+// 	case StateClosed:
+// 		cb.failures = 0
+// 	case StateHalfOpen:
+// 		cb.setState(StateClosed)
+// 		cb.failures = 0
+// 		cb.halfOpenAttempts = 0
+// 	}
+// }
 
-func (cb *CircuitBreaker) recordFailure() {
-	cb.mu.Lock()
-	defer cb.mu.Unlock()
+// func (cb *CircuitBreaker) recordFailure() {
+// 	cb.mu.Lock()
+// 	defer cb.mu.Unlock()
 
-	cb.failures++
-	cb.lastFailureTime = time.Now()
+// 	cb.failures++
+// 	cb.lastFailureTime = time.Now()
 
-	switch cb.state {
-	case StateClosed:
-		if cb.failures >= cb.maxFailures {
-			cb.setState(StateOpen)
-		}
-	case StateHalfOpen:
-		cb.setState(StateOpen)
-	}
+// 	switch cb.state {
+// 	case StateClosed:
+// 		if cb.failures >= cb.maxFailures {
+// 			cb.setState(StateOpen)
+// 		}
+// 	case StateHalfOpen:
+// 		cb.setState(StateOpen)
+// 	}
 
-}
+// }
 
-var breaker = CircuitBreaker{}
+// var breaker = CircuitBreaker{}
 
-func resetBreaker() {
-	breaker.mu.Lock()
-	defer breaker.mu.Unlock()
+// func resetBreaker() {
+// 	breaker.mu.Lock()
+// 	defer breaker.mu.Unlock()
 
-	breaker.failures = 0
-}
+// 	breaker.failures = 0
+// }
+
 
 // Create breakers for different services
 var (
