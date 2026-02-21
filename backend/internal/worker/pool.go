@@ -7,9 +7,9 @@ import (
 	"sync"
 )
 
-func ProcessLogs(logs []models.LogEntry, workers int) []models.ClassificationResult {
+func ProcessLogs(logs []models.LogEntry, workers int) []*models.ClassificationResult {
 	jobs := make(chan models.LogEntry, len(logs))
-	results := make(chan models.ClassificationResult, len(logs))
+	results := make(chan *models.ClassificationResult, len(logs))
 
 	var wg sync.WaitGroup
 
@@ -17,6 +17,7 @@ func ProcessLogs(logs []models.LogEntry, workers int) []models.ClassificationRes
 		wg.Add(1)
 		go func(WorkerID int) {
 			defer wg.Done()
+
 			defer func() {
 				if r := recover(); r != nil {
 
@@ -27,11 +28,8 @@ func ProcessLogs(logs []models.LogEntry, workers int) []models.ClassificationRes
 			defer metrics.ActiveWorkers.Dec()
 
 			for job := range jobs {
-				label := classifier.Classify(job)
-				results <- models.ClassificationResult{
-					Source: job.Source,
-					Label:  label,
-				}
+				result := classifier.Classify(job)
+				results <- result
 			}
 		}(w)
 	}
@@ -47,7 +45,7 @@ func ProcessLogs(logs []models.LogEntry, workers int) []models.ClassificationRes
 		close(results)
 	}()
 
-	var output []models.ClassificationResult
+	var output []*models.ClassificationResult
 	for result := range results {
 		output = append(output, result)
 	}

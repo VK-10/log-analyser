@@ -7,39 +7,46 @@ import (
 	"time"
 )
 
-func Classify(entry models.LogEntry) string {
-	label := ClassifyWithRegex(entry.LogMessage)
-	if label != "" {
-		return label
+func Classify(entry models.LogEntry) *models.ClassificationResult {
+
+	// fmt.Printf("DEBUG LogMessage = %#v\n", entry.LogMessage)
+	//regex
+	if result := ClassifyWithRegex(entry.LogMessage); result != nil {
+		return result
 	}
 
-	ctx, cancel := context.WithTimeout(context.Background(), 500*time.Millisecond)
+	// bert
+	ctx, cancel := context.WithTimeout(context.Background(), 4*time.Second)
 	defer cancel()
 
-	// marking circuit-open errors as permanent
-	label, err := Retry(ctx, 2, func() (string, error) {
+	bertResult, err := Retry(ctx, 2, func() (*models.ClassificationResult, error) {
 		result, err := ClassifyWithBERT(ctx, entry.LogMessage)
 		if err != nil && strings.Contains(err.Error(), "circuit open") {
-			return "", Permanent(err) // stops retry immediately
+			return nil, Permanent(err) // stops retry immediately
 		}
 		return result, err
 	})
 
-	if err == nil && label != "" {
-		return label
+	if err == nil && bertResult != nil && bertResult.Confidence >= 0.5 {
+		return bertResult
 	}
 
 	//llm with timeout + retry
 	llmCtx, cancelLLM := context.WithTimeout(context.Background(), 2*time.Second)
 	defer cancelLLM()
 
-	label, err = Retry(llmCtx, 2, func() (string, error) {
+	llmResult, err := Retry(llmCtx, 2, func() (*models.ClassificationResult, error) {
 		return CallLLMWithTimeout(llmCtx, entry.LogMessage)
 	})
 
-	if err == nil && label != "" {
-		return label
+	if err == nil && llmResult != nil {
+		return llmResult
 	}
 
-	return "unknown"
+	return &models.ClassificationResult{
+		LabelID:    "UNCLASSIFIED",
+		Label:      "Unclassified",
+		Source:     "orchestrator",
+		Confidence: 0.0,
+	}
 }

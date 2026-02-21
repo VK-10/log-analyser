@@ -6,6 +6,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"io"
+	"log-classifier/internal/models"
 	"net/http"
 	"time"
 )
@@ -21,12 +22,13 @@ type BERTResponse struct {
 }
 
 var bertClient = &http.Client{
-	Timeout: 1 * time.Second,
+	Timeout: 5 * time.Second,
 }
 
 const bertServiceURL = "http://bert-service:5000/classify"
 
-func ClassifyWithBERT(ctx context.Context, msg string) (*ClassificationResult, error) {
+func ClassifyWithBERT(ctx context.Context, msg string) (*models.ClassificationResult, error) {
+	fmt.Println("DEBUG: BERT CALLED with:", msg)
 	reqBody := BERTRequest{Message: msg}
 	jsonData, err := json.Marshal(reqBody)
 
@@ -40,10 +42,13 @@ func ClassifyWithBERT(ctx context.Context, msg string) (*ClassificationResult, e
 	}
 	req.Header.Set("Content-Type", "application/json")
 
+	fmt.Println("DEBUG: BERT HTTP request starting")
+
 	resp, err := bertClient.Do(req)
 	if err != nil {
 		return nil, fmt.Errorf("failed to call BERT service: %w", err)
 	}
+	fmt.Println("DEBUG: BERT HTTP status:", resp.StatusCode)
 	defer resp.Body.Close()
 
 	if resp.StatusCode != http.StatusOK {
@@ -57,8 +62,10 @@ func ClassifyWithBERT(ctx context.Context, msg string) (*ClassificationResult, e
 		return nil, fmt.Errorf("failed to decode response: %w", err)
 	}
 
+	fmt.Printf("DEBUG: BERT RAW RESPONSE: %+v\n", bertResp)
+
 	// return bertResp.Label, nil
-	return &ClassificationResult{
+	return &models.ClassificationResult{
 		LabelID:    bertResp.LabelID,
 		Label:      bertResp.Label,
 		Source:     "classifier",

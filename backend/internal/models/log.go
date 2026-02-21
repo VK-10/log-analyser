@@ -6,6 +6,8 @@ type LogEntry struct {
 }
 
 type ClassificationResult struct {
-	Source string `json:"source"`
-	Label  string `json:"label"`
+	LabelID    string  `json:"label_id"`
+	Label      string  `json:"label"`
+	Source     string  `json:"source"`
+	Confidence float64 `json:"confidence"`
 }

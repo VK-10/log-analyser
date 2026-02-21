@@ -1,13 +1,9 @@
 package classifier
 
-import "regexp"
-
-type ClassificationResult struct {
-	LabelID    string  `json:"label_id"`
-	Label      string  `json:"label"`
-	Source     string  `json:"source"`
-	Confidence float64 `json:"confidence"`
-}
+import (
+	"log-classifier/internal/models"
+	"regexp"
+)
 
 type regexRule struct {
 	pattern *regexp.Regexp
@@ -17,7 +13,7 @@ type regexRule struct {
 
 var regexRules = []regexRule{
 	{
-		pattern: regexp.MustCompile(`(?i)User \w+ logged (in|out)\.`),
+		pattern: regexp.MustCompile(`(?i)User \w+ logged (in|out)`),
 		labelID: "USER_ACTION",
 		label:   "User Action",
 	},
@@ -32,7 +28,7 @@ var regexRules = []regexRule{
 		label:   "System Notification",
 	},
 	{
-		pattern: regexp.MustCompile(`(?i)Backup completed successfully\.`),
+		pattern: regexp.MustCompile(`(?i)Backup completed successfully`),
 		labelID: "SYSTEM_NOTIFICATION",
 		label:   "System Notification",
 	},
@@ -47,7 +43,7 @@ var regexRules = []regexRule{
 		label:   "System Notification",
 	},
 	{
-		pattern: regexp.MustCompile(`(?i)Disk cleanup completed successfully\.`),
+		pattern: regexp.MustCompile(`(?i)Disk cleanup completed successfully`),
 		labelID: "SYSTEM_NOTIFICATION",
 		label:   "System Notification",
 	},
@@ -58,10 +54,10 @@ var regexRules = []regexRule{
 	},
 }
 
-func ClassifyWithRegex(msg string) *ClassificationResult {
+func ClassifyWithRegex(msg string) *models.ClassificationResult {
 	for _, rule := range regexRules {
 		if rule.pattern.MatchString(msg) {
-			return &ClassificationResult{
+			return &models.ClassificationResult{
 				LabelID:    rule.labelID,
 				Label:      rule.label,
 				Source:     "regex",

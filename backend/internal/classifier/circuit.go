@@ -16,19 +16,21 @@ const (
 )
 
 type CircuitBreaker struct {
+	name           string
 	maxFailures    int
 	resetTimeout   time.Duration
 	halfOpenMaxReq int
 
-	mu               sync.RWMutex
+	mu               sync.Mutex
 	state            State
 	failures         int
 	lastFailureTime  time.Time
 	halfOpenAttempts int
 }
 
-func NewCircuitBreaker(maxFailures int, resetTimeout time.Duration) *CircuitBreaker {
+func NewCircuitBreaker(name string, maxFailures int, resetTimeout time.Duration) *CircuitBreaker {
 	return &CircuitBreaker{
+		name:           name,
 		maxFailures:    maxFailures,
 		resetTimeout:   resetTimeout,
 		halfOpenMaxReq: 1, //one test at time of tesing
@@ -37,17 +39,18 @@ func NewCircuitBreaker(maxFailures int, resetTimeout time.Duration) *CircuitBrea
 }
 
 var (
-	ErrCicuitOpen      = errors.New("Cicuit breaker is open")
+	ErrCircuitOpen     = errors.New("Cicuit breaker is open")
 	ErrTooManyRequests = errors.New("circuit breaker: too many requests")
 )
 
-//call
-func (cb *CircuitBreaker) Call[T any](fn func() (T, error)) (T, error) {
+// call
+func CallWithBreaker[T any](cb *CircuitBreaker, fn func() (T, error)) (T, error) {
 	var zero T
 
 	cb.mu.Lock()
 
-	// OPEN state
+	//open
+
 	if cb.state == StateOpen {
 		if time.Since(cb.lastFailureTime) > cb.resetTimeout {
 			cb.state = StateHalfOpen
@@ -58,7 +61,7 @@ func (cb *CircuitBreaker) Call[T any](fn func() (T, error)) (T, error) {
 		}
 	}
 
-	// HALF-OPEN state
+	//half-open
 	if cb.state == StateHalfOpen {
 		if cb.halfOpenAttempts >= cb.halfOpenMaxReq {
 			cb.mu.Unlock()
@@ -66,129 +69,47 @@ func (cb *CircuitBreaker) Call[T any](fn func() (T, error)) (T, error) {
 		}
 		cb.halfOpenAttempts++
 	}
-
 	cb.mu.Unlock()
 
-	// ---- execute protected call ----
+	//executing the protected function
 	result, err := fn()
 
 	cb.mu.Lock()
 	defer cb.mu.Unlock()
 
+	// Record result
 	if err != nil {
-		cb.recordFailureLocked()
+		cb.failures++
+		cb.lastFailureTime = time.Now()
+		if cb.state == StateHalfOpen || cb.failures >= cb.maxFailures {
+			cb.state = StateOpen
+			metrics.CircuitBreakerState.WithLabelValues(cb.name).Set(1)
+
+		}
+
 		return zero, err
 	}
 
-	cb.recordSuccessLocked()
+	//success
+	cb.failures = 0
+	if cb.state == StateHalfOpen {
+		cb.state = StateClosed
+		cb.halfOpenAttempts = 0
+	}
+	metrics.CircuitBreakerState.WithLabelValues(cb.name).Set(0)
 	return result, nil
 }
 
-
-//state transitions
-
-func (cb *CircuitBreaker) recordSuccessLocked() {
-	switch cb.state {
-	case StateClosed:
-		cb.failures = 0
-	case StateHalfOpen:
-		cb.state = StateClosed
-		cb.failures = 0
-		cb.halfOpenAttempts = 0
-	}
-
-	metrics.CircuitBreakerState.WithLabelValues("llm").Set(0)
-}
-
-func (cb *CircuitBreaker) recordFailureLocked() {
-	cb.failures++
-	cb.lastFailureTime = time.Now()
-
-	switch cb.state {
-	case StateClosed:
-		if cb.failures >= cb.maxFailures {
-			cb.state = StateOpen
-			metrics.CircuitBreakerState.WithLabelValues("llm").Set(1)
-		}
-	case StateHalfOpen:
-		cb.state = StateOpen
-		metrics.CircuitBreakerState.WithLabelValues("llm").Set(1)
-	}
-}
-
-//
-
-// func (cb *CircuitBreaker) transitionToHalfOpen() {
-// 	cb.mu.Lock()
-// 	defer cb.mu.Unlock()
-
-// 	if cb.state == StateOpen {
-// 		cb.setState(StateHalfOpen)
-// 		cb.halfOpenAttempts = 0
-// 	}
-// }
-
-// func (cb *CircuitBreaker) setState(newState State) {
-// 	cb.state = newState
-
-// 	var stateValue float64
-// 	if newState == StateOpen {
-// 		stateValue = 1
-// 	}
-
-// 	metrics.CircuitBreakerState.WithLabelValues("llm").Set(stateValue)
-// }
+//state
 
 func (cb *CircuitBreaker) State() State {
-	cb.mu.RLock()
-	defer cb.mu.RUnlock()
+	cb.mu.Lock()
+	defer cb.mu.Unlock()
 	return cb.state
 }
 
-// func (cb *CircuitBreaker) recordSuccess() {
-// 	cb.mu.Lock()
-// 	defer cb.mu.Unlock()
-
-// 	switch cb.state {
-// 	case StateClosed:
-// 		cb.failures = 0
-// 	case StateHalfOpen:
-// 		cb.setState(StateClosed)
-// 		cb.failures = 0
-// 		cb.halfOpenAttempts = 0
-// 	}
-// }
-
-// func (cb *CircuitBreaker) recordFailure() {
-// 	cb.mu.Lock()
-// 	defer cb.mu.Unlock()
-
-// 	cb.failures++
-// 	cb.lastFailureTime = time.Now()
-
-// 	switch cb.state {
-// 	case StateClosed:
-// 		if cb.failures >= cb.maxFailures {
-// 			cb.setState(StateOpen)
-// 		}
-// 	case StateHalfOpen:
-// 		cb.setState(StateOpen)
-// 	}
-
-// }
-
-// var breaker = CircuitBreaker{}
-
-// func resetBreaker() {
-// 	breaker.mu.Lock()
-// 	defer breaker.mu.Unlock()
-
-// 	breaker.failures = 0
-// }
-
-
 // Create breakers for different services
 var (
-	llmBreaker  = NewCircuitBreaker(3, 5*time.Second)
-	bertBreaker = NewCircuitBreaker(5, 10*time.Second) // more tolerant
+	llmBreaker  = NewCircuitBreaker("llm", 3, 5*time.Second)
+	bertBreaker = NewCircuitBreaker("bert", 5, 10*time.Second) // more tolerant
 )
