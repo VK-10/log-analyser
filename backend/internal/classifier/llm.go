@@ -15,7 +15,7 @@ var llmClient = &http.Client{
 	Timeout: 3 * time.Second,
 }
 
-const llmServiceURL = "http://llm-service:5001/classify"
+const llmServiceURL = "http://127.0.0.1:5001/classify"
 
 func callLLMInternal(msg string) (*models.ClassificationResult, error) {
 	fmt.Println("DEBUG: BERT CALLED with:", msg)

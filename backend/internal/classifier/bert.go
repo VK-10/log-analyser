@@ -25,7 +25,7 @@ var bertClient = &http.Client{
 	Timeout: 5 * time.Second,
 }
 
-const bertServiceURL = "http://bert-service:5000/classify"
+const bertServiceURL = "http://127.0.0.1:5000/classify"
 
 func ClassifyWithBERT(ctx context.Context, msg string) (*models.ClassificationResult, error) {
 	fmt.Println("DEBUG: BERT CALLED with:", msg)

@@ -27,8 +27,10 @@ func Classify(entry models.LogEntry) *models.ClassificationResult {
 		return result, err
 	})
 
-	if err == nil && bertResult != nil && bertResult.Confidence >= 0.5 {
-		return bertResult
+	if err == nil && bertResult != nil {
+		if bertResult.LabelID != "UNCLASSIFIED" && bertResult.Confidence >= 0.2 {
+			return bertResult
+		}
 	}
 
 	//llm with timeout + retry
