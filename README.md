@@ -71,6 +71,36 @@ The pipeline is **short-circuit**: if a stage produces a confident result, downs
     └── log_classifier_model.joblib # Trained sklearn classifier
 ```
 
+Performance Benchmark
+
+The system was evaluated under increasing load to measure scalability, throughput, and latency behavior.
+
+Load Test: 50 vs 100 Virtual Users
+Metric	50 VUs	100 VUs	Change
+Success rate	100%	100%	Stable
+Throughput	33 req/s	62 req/s	~1.9x increase
+Avg latency	228 ms	297 ms	+30%
+p90 latency	256 ms	414 ms	+60%
+Max latency	375 ms	629 ms	+67%
+Performance Scorecard
+Dimension	Score (10)	Rationale
+Reliability	10/10	Zero failures at both load levels
+Throughput	9/10	Near-linear scaling with user increase
+Avg Latency	7/10	Moderate degradation under load
+Tail Latency	6/10	Significant increase in p90 and max latency
+Scalability	8/10	System scales well but shows pressure at higher concurrency
+Analysis
+The system demonstrates strong horizontal scalability, with throughput nearly doubling as load increases.
+Latency increases are expected due to higher concurrency and contention in the worker pool and downstream services.
+The tail latency (p90, max) increases significantly, indicating variability in processing time, most likely from:
+LLM inference variability
+retry and circuit breaker behavior
+inter-service communication overhead
+Key Takeaways
+The system is reliable and throughput-efficient under load
+Performance bottlenecks are primarily in ML inference services, not the Go backend
+Tail latency is the main area requiring optimization
+
 ---
 
 ## Getting Started
