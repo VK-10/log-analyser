@@ -39,7 +39,7 @@ func NewCircuitBreaker(name string, maxFailures int, resetTimeout time.Duration)
 }
 
 var (
-	ErrCircuitOpen     = errors.New("Cicuit breaker is open")
+	ErrCircuitOpen     = errors.New("Circuit breaker is open")
 	ErrTooManyRequests = errors.New("circuit breaker: too many requests")
 )
 

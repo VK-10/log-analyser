@@ -12,6 +12,7 @@ func Classify(entry models.LogEntry) *models.ClassificationResult {
 	// fmt.Printf("DEBUG LogMessage = %#v\n", entry.LogMessage)
 	//regex
 	if result := ClassifyWithRegex(entry.LogMessage); result != nil {
+		result.LogSource = entry.Source
 		return result
 	}
 
@@ -48,7 +49,7 @@ func Classify(entry models.LogEntry) *models.ClassificationResult {
 	return &models.ClassificationResult{
 		LabelID:    "UNCLASSIFIED",
 		Label:      "Unclassified",
-		Source:     "orchestrator",
+		Classifier: "orchestrator",
 		Confidence: 0.0,
 	}
 }

@@ -6,8 +6,29 @@ import (
 	"net/http"
 	"time"
 
+	"github.com/prometheus/client_golang/prometheus"
 	"github.com/prometheus/client_golang/prometheus/promhttp"
 )
+
+var (
+	classifyTotal = prometheus.NewCounterVec(
+		prometheus.CounterOpts{
+			Name: "log_classifier_requests_total",
+			Help: "Total classification requests",
+		},
+		[]string{"status"},
+	)
+	classifyDuration = prometheus.NewHistogram(
+		prometheus.HistogramOpts{
+			Name: "log_classifier_duration_seconds",
+			Help: "Classification request duration",
+		},
+	)
+)
+
+func init() {
+	prometheus.MustRegister(classifyTotal, classifyDuration)
+}
 
 func enableCORS(next http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
@@ -27,34 +48,30 @@ func enableCORS(next http.Handler) http.Handler {
 func loggingMiddleware(next http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		start := time.Now()
-
-		// Call the next handler
 		next.ServeHTTP(w, r)
-
-		// Log the request
-		log.Printf(
-			"%s %s %s",
-			r.Method,
-			r.RequestURI,
-			time.Since(start),
-		)
+		log.Printf("%s %s %s", r.Method, r.RequestURI, time.Since(start))
 	})
 }
 
 func main() {
 	mux := http.NewServeMux()
 
-	// API endpoints
-	mux.HandleFunc("/classify", api.ClassifyHandler)
+	mux.HandleFunc("/classify", func(w http.ResponseWriter, r *http.Request) {
+		start := time.Now()
+
+		api.ClassifyHandler(w, r)
+
+		classifyDuration.Observe(time.Since(start).Seconds())
+		classifyTotal.WithLabelValues("success").Inc()
+	})
+
 	mux.HandleFunc("/health", func(w http.ResponseWriter, r *http.Request) {
 		w.Header().Set("Content-Type", "application/json")
 		w.Write([]byte(`{"status":"healthy"}`))
 	})
 
-	// Prometheus metrics endpoint
 	mux.Handle("/metrics", promhttp.Handler())
 
-	// Apply middleware
 	handler := loggingMiddleware(enableCORS(mux))
 
 	log.Println("Server running on :8080")

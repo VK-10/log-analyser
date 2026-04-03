@@ -68,7 +68,7 @@ func ClassifyWithBERT(ctx context.Context, msg string) (*models.ClassificationRe
 	return &models.ClassificationResult{
 		LabelID:    bertResp.LabelID,
 		Label:      bertResp.Label,
-		Source:     "classifier",
+		Classifier: "classifier",
 		Confidence: bertResp.Confidence,
 	}, nil
 

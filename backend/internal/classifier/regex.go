@@ -60,7 +60,7 @@ func ClassifyWithRegex(msg string) *models.ClassificationResult {
 			return &models.ClassificationResult{
 				LabelID:    rule.labelID,
 				Label:      rule.label,
-				Source:     "regex",
+				Classifier: "regex",
 				Confidence: 0.95,
 			}
 		}

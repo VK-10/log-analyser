@@ -149,7 +149,7 @@ func TestBreaker_RejectsConcurrentHalfOpenRequests(t *testing.T) {
 		return "nope", nil
 	})
 
-	if err != ErrTooManyRequests {
-		t.Fatalf("expected ErrTooManyRequests, got %v", err)
+	if err != ErrCircuitOpen {
+		t.Fatalf("expected ErrCircuitOpen, got %v", err)
 	}
 }
